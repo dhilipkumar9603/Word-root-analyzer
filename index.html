@@ -1,0 +1,737 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WordRoot — Deep Word Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3ee;
+    --ink: #1c1710;
+    --accent: #b5451b;
+    --accent2: #2d6a4f;
+    --gold: #c8860a;
+    --surface: #ffffff;
+    --muted: #8a7d6b;
+    --border: #e0d8cc;
+    --shadow: rgba(28,23,16,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  /* Warm paper texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(ellipse 800px 600px at 20% 10%, rgba(200,134,10,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 600px 800px at 85% 90%, rgba(181,69,27,0.05) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* Subtle dot grid */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: radial-gradient(circle, rgba(28,23,16,0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none; z-index: 0;
+    opacity: 0.5;
+  }
+
+  .page {
+    position: relative; z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+  }
+
+  /* HEADER */
+  header {
+    text-align: center;
+    margin-bottom: 52px;
+  }
+  .header-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(48px, 10vw, 80px);
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -2px;
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+  .header-sub {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 300;
+    max-width: 420px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* SEARCH BOX */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 40px;
+  }
+  .search-inner {
+    display: flex;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px var(--shadow);
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .search-inner:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 4px 32px rgba(181,69,27,0.14);
+  }
+  #wordInput {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 20px 24px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--ink);
+    background: transparent;
+    letter-spacing: -0.5px;
+  }
+  #wordInput::placeholder {
+    color: var(--border);
+    font-style: italic;
+    font-weight: 400;
+  }
+  #searchBtn {
+    background: var(--accent);
+    border: none;
+    padding: 0 28px;
+    cursor: pointer;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+  #searchBtn:hover { background: #8f3112; }
+  #searchBtn:active { transform: scale(0.97); }
+  #searchBtn:disabled { background: var(--border); cursor: not-allowed; color: var(--muted); }
+
+  /* Example words */
+  .example-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .example-words span {
+    font-size: 12px;
+    color: var(--muted);
+    margin-right: 4px;
+    font-weight: 400;
+  }
+  .word-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    font-style: italic;
+    transition: all 0.2s;
+  }
+  .word-chip:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* LOADING */
+  #loading {
+    display: none;
+    text-align: center;
+    padding: 48px 0;
+  }
+  .loader-word {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-style: italic;
+    color: var(--muted);
+    animation: breathe 1.4s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+  .loader-dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 16px;
+  }
+  .loader-dots span {
+    width: 7px; height: 7px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: dot 1.2s ease-in-out infinite;
+  }
+  .loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* RESULT CARD */
+  #result { display: none; }
+
+  .word-hero {
+    text-align: center;
+    padding: 36px 0 28px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    animation: slideIn 0.5s ease both;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .word-display {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(40px, 9vw, 72px);
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .word-pronunciation {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .word-pos {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Accuracy badge */
+  .accuracy-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    animation: slideIn 0.5s 0.1s ease both;
+    opacity: 0;
+    animation-fill-mode: forwards;
+  }
+  .acc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .acc-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .acc-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent2), #52b788);
+    width: 0;
+    transition: width 1s ease 0.4s;
+  }
+  .acc-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent2);
+    white-space: nowrap;
+  }
+
+  /* Sections */
+  .info-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 26px 28px;
+    margin-bottom: 16px;
+    animation: slideIn 0.5s ease both;
+    opacity: 0;
+    animation-fill-mode: forwards;
+  }
+  .info-section:nth-child(1) { animation-delay: 0.15s; }
+  .info-section:nth-child(2) { animation-delay: 0.25s; }
+  .info-section:nth-child(3) { animation-delay: 0.35s; }
+  .info-section:nth-child(4) { animation-delay: 0.45s; }
+  .info-section:nth-child(5) { animation-delay: 0.55s; }
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .section-label .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .root-content {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .root-word {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--accent);
+    font-style: italic;
+  }
+  .root-lang {
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .root-meaning {
+    font-size: 15px;
+    color: var(--ink);
+    margin-top: 8px;
+    font-weight: 400;
+  }
+  .related-roots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .related-chip {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    font-style: italic;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 3px 12px;
+    border-radius: 6px;
+    color: var(--ink);
+  }
+
+  .meaning-text {
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--ink);
+    font-weight: 300;
+  }
+  .meaning-text strong { font-weight: 600; }
+
+  .usecase-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .usecase-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .usecase-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(181,69,27,0.08);
+    padding: 3px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .usecase-text {
+    font-size: 15px;
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .usecase-text em {
+    font-style: italic;
+    color: var(--accent2);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 17px;
+  }
+
+  .synonyms-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .syn-chip {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+    font-style: italic;
+    padding: 5px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--ink);
+    background: var(--bg);
+    transition: all 0.2s;
+    cursor: default;
+  }
+  .syn-chip:hover {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  /* ERROR */
+  #error {
+    display: none;
+    text-align: center;
+    padding: 40px;
+    background: var(--surface);
+    border: 1px solid #f0d0c8;
+    border-radius: 14px;
+    animation: slideIn 0.4s ease both;
+  }
+  #error .err-icon { font-size: 36px; margin-bottom: 12px; }
+  #error p { color: var(--muted); font-size: 15px; }
+
+  /* HISTORY */
+  .history-wrap {
+    margin-top: 44px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+  }
+  .history-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .history-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .history-chip {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    font-style: italic;
+    padding: 5px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    transition: all 0.18s;
+    color: var(--ink);
+  }
+  .history-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  @media (max-width: 600px) {
+    .page { padding: 40px 16px 60px; }
+    #wordInput { font-size: 20px; padding: 16px 16px; }
+    #searchBtn { padding: 0 18px; font-size: 12px; }
+    .info-section { padding: 20px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="header-eyebrow">// Word Intelligence Engine</div>
+    <h1>Word<em>Root</em></h1>
+    <p class="header-sub">Discover the root, meaning, and real-world use of any English word — powered by AI.</p>
+  </header>
+
+  <!-- SEARCH -->
+  <div class="search-wrap">
+    <div class="search-inner">
+      <input type="text" id="wordInput" placeholder="e.g. tenacious…" autocomplete="off" spellcheck="false">
+      <button id="searchBtn" onclick="analyzeWord()">Analyze →</button>
+    </div>
+  </div>
+  <div class="example-words">
+    <span>Try:</span>
+    <button class="word-chip" onclick="quickSearch('ephemeral')">ephemeral</button>
+    <button class="word-chip" onclick="quickSearch('benevolent')">benevolent</button>
+    <button class="word-chip" onclick="quickSearch('taciturn')">taciturn</button>
+    <button class="word-chip" onclick="quickSearch('perspicacious')">perspicacious</button>
+    <button class="word-chip" onclick="quickSearch('equanimity')">equanimity</button>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading">
+    <div class="loader-word" id="loadingWord">Analyzing…</div>
+    <div class="loader-dots">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <!-- ERROR -->
+  <div id="error">
+    <div class="err-icon">📖</div>
+    <p id="errorMsg">Something went wrong. Please try again.</p>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result">
+    <div class="word-hero">
+      <div class="word-display" id="resWord"></div>
+      <div class="word-pronunciation" id="resPronunciation"></div>
+      <span class="word-pos" id="resPos"></span>
+    </div>
+
+    <div class="accuracy-bar-wrap">
+      <div class="acc-label">AI Confidence</div>
+      <div class="acc-track"><div class="acc-fill" id="accFill"></div></div>
+      <div class="acc-pct" id="accPct"></div>
+    </div>
+
+    <div class="info-section" style="animation-delay:0.15s">
+      <div class="section-label"><div class="dot" style="background:#b5451b"></div>Root & Etymology</div>
+      <div id="rootContent"></div>
+    </div>
+
+    <div class="info-section" style="animation-delay:0.25s">
+      <div class="section-label"><div class="dot" style="background:#2d6a4f"></div>Meaning</div>
+      <div class="meaning-text" id="resMeaning"></div>
+    </div>
+
+    <div class="info-section" style="animation-delay:0.35s">
+      <div class="section-label"><div class="dot" style="background:#c8860a"></div>Use Cases & Example Sentences</div>
+      <div class="usecase-list" id="resUsecases"></div>
+    </div>
+
+    <div class="info-section" style="animation-delay:0.45s">
+      <div class="section-label"><div class="dot" style="background:#7c6f5a"></div>Synonyms & Related Words</div>
+      <div class="synonyms-wrap" id="resSynonyms"></div>
+    </div>
+
+    <div class="info-section" style="animation-delay:0.55s">
+      <div class="section-label"><div class="dot" style="background:#5a7ec8"></div>Memory Tip</div>
+      <div class="meaning-text" id="resMemoryTip"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="history-wrap" id="historyWrap" style="display:none">
+    <div class="history-title">// Recent Searches</div>
+    <div class="history-chips" id="historyChips"></div>
+  </div>
+
+</div>
+
+<script>
+  const history = [];
+
+  async function analyzeWord() {
+    const word = document.getElementById('wordInput').value.trim();
+    if (!word) return;
+
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('loadingWord').textContent = `Analyzing "${word}"…`;
+    document.getElementById('result').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+
+    const prompt = `Analyze the English word: "${word}"
+
+Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
+{
+  "word": "${word}",
+  "pronunciation": "/phonetic spelling/",
+  "partOfSpeech": "noun/verb/adjective/etc",
+  "confidence": 92,
+  "root": {
+    "rootWord": "the root/base",
+    "language": "Latin/Greek/Old English/etc",
+    "rootMeaning": "what the root means",
+    "relatedWords": ["word1", "word2", "word3"]
+  },
+  "meaning": "Clear, detailed definition. Explain nuance and connotation in 2-3 sentences.",
+  "usecases": [
+    {"context": "Formal writing", "sentence": "Example sentence using ${word} in formal context."},
+    {"context": "Everyday speech", "sentence": "Example sentence using ${word} conversationally."},
+    {"context": "Academic/Professional", "sentence": "Example sentence using ${word} professionally."}
+  ],
+  "synonyms": ["syn1", "syn2", "syn3", "syn4", "syn5"],
+  "memoryTip": "A clever mnemonic, analogy, or visual trick to remember this word easily."
+}
+
+The confidence score should honestly reflect how well-known/documented the word is (50-99). Be accurate.`;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data.content.map(i => i.text || "").join("");
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      renderResult(parsed);
+      addToHistory(word);
+    } catch (err) {
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('errorMsg').textContent = `Could not analyze "${word}". Please check spelling and try again.`;
+    } finally {
+      document.getElementById('loading').style.display = 'none';
+      btn.disabled = false;
+    }
+  }
+
+  function renderResult(d) {
+    // Word hero
+    document.getElementById('resWord').textContent = d.word;
+    document.getElementById('resPronunciation').textContent = d.pronunciation || '';
+    document.getElementById('resPos').textContent = d.partOfSpeech || '';
+
+    // Accuracy
+    const conf = Math.min(99, Math.max(50, d.confidence || 88));
+    document.getElementById('accPct').textContent = conf + '%';
+    setTimeout(() => {
+      document.getElementById('accFill').style.width = conf + '%';
+    }, 100);
+
+    // Root
+    const r = d.root || {};
+    document.getElementById('rootContent').innerHTML = `
+      <div class="root-content">
+        <div class="root-word">${r.rootWord || '—'}</div>
+        <span class="root-lang">${r.language || ''}</span>
+      </div>
+      <div class="root-meaning">${r.rootMeaning || ''}</div>
+      ${r.relatedWords && r.relatedWords.length ? `
+        <div style="margin-top:12px; font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">Words from same root</div>
+        <div class="related-roots">${r.relatedWords.map(w => `<span class="related-chip">${w}</span>`).join('')}</div>
+      ` : ''}
+    `;
+
+    // Meaning
+    document.getElementById('resMeaning').innerHTML = d.meaning || '—';
+
+    // Use cases
+    const ul = document.getElementById('resUsecases');
+    ul.innerHTML = (d.usecases || []).map((u, i) => `
+      <div class="usecase-item">
+        <span class="usecase-num">${u.context || (i+1)}</span>
+        <div class="usecase-text"><em>${u.sentence || ''}</em></div>
+      </div>
+    `).join('');
+
+    // Synonyms
+    document.getElementById('resSynonyms').innerHTML =
+      (d.synonyms || []).map(s => `<span class="syn-chip">${s}</span>`).join('');
+
+    // Memory tip
+    document.getElementById('resMemoryTip').innerHTML = `💡 ${d.memoryTip || '—'}`;
+
+    document.getElementById('result').style.display = 'block';
+
+    // Re-trigger animations
+    document.querySelectorAll('#result .info-section, #result .accuracy-bar-wrap').forEach(el => {
+      el.style.opacity = '0';
+      void el.offsetWidth;
+      el.style.opacity = '';
+    });
+
+    document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function addToHistory(word) {
+    if (!history.includes(word.toLowerCase())) {
+      history.unshift(word.toLowerCase());
+      if (history.length > 8) history.pop();
+    }
+    const wrap = document.getElementById('historyWrap');
+    const chips = document.getElementById('historyChips');
+    wrap.style.display = 'block';
+    chips.innerHTML = history.map(w =>
+      `<button class="history-chip" onclick="quickSearch('${w}')">${w}</button>`
+    ).join('');
+  }
+
+  function quickSearch(word) {
+    document.getElementById('wordInput').value = word;
+    analyzeWord();
+  }
+
+  document.getElementById('wordInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') analyzeWord();
+  });
+</script>
+</body>
+</html>
